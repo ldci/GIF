@@ -1,7 +1,7 @@
-#!/usr/local/bin/red
+#!/usr/local/bin/red-view
 Red [
     File: %gifReader.red
-    Description: {Implements parse-based algorithm for LZW compression and decompression with extendable codes}
+    Description: {Implements non-parse-based algorithm for gif images reading}
     Authors: "François Jouen and Toomas Vooglaid"
     Rights:  "Copyright (C) 2022 Red Foundation. All rights reserved."
     License: {
@@ -30,7 +30,7 @@ LSD: make object! [
 	height: 			0		;--integer [2 bytes] : frame height
 	packed: 			0		;--byte [0..255]
 	backGround: 		0		;--byte	background : color index			
-	aspectRatio: 		0		;--byte [0..255] : the width of the pixel divided by the height of the pixel
+	aspectRatio: 		0		;--byte [0..255] : the width / by the height of the pixel
 	hasColorTable?:		false	;--from packed : is global color table present?
 	colorResolution: 	0		;--from packed : color depth minus 1
 	colorSorted?: 	 	0		;--from packed : are colors sorted?
@@ -293,7 +293,7 @@ readAPE: function [
 
 getGifBlocks: does [
 	IMDBlock: copy [] ;--Image Descriptor block
-	CGEBlock: copy [] ;--Graphics Control Extension [optional]
+	GCEBlock: copy [] ;--Graphics Control Extension [optional]
 	PTEBlock: copy [] ;--Plain Text Extension [optional]		 
 	APEBlock: copy [] ;--Application Extension [optional]
 	CEXBlock: copy [] ;--Comment Extension [optional]
@@ -309,7 +309,7 @@ getGifBlocks: does [
  			255 [tr: gFile/17]
  		]
  		if all [code = 33 label = 1   tr = 0][append PTEBlock idx]
- 		if all [code = 33 label = 249 tr = 0][append CGEBlock idx] 
+ 		if all [code = 33 label = 249 tr = 0][append GCEBlock idx] 
  		if all [code = 33 label = 254 tr = 0][append CEXBlock idx]	 
  		if all [code = 33 label = 255 tr = 0][append APEBlock idx] 
  		
@@ -428,6 +428,7 @@ decodeLZW: function [
 			code = endOfInput [
 				;new-line/skip *frame/indices true LSD/width
 				;probe *frame/indices
+				makeImage *frame
 				return true
 			]
 			true [
@@ -493,7 +494,7 @@ renderImages: func [
 		;--we need a background image (most of gif are based on first pixel)
 		if LSD/backGround >= 255 [LSD/backGround: 0]
 		bgColor: to-tuple globalColorTable/(LSD/backGround + 1)
-		bg: make image! reduce [as-pair LSD/width LSD/height bgColor]
+		bgImage: make image! reduce [as-pair LSD/width LSD/height bgColor]
 	]
 	n: length? images 
 	repeat i n [
@@ -503,13 +504,16 @@ renderImages: func [
 		switch current/disposal [
 			0 [bitmap: copy previous/bmp]
 			1 [bitmap: copy previous/bmp change at bitmap current/pos + 1 current/bmp]
-			2 [bitmap: copy bg change at bitmap current/pos + 1 current/bmp]
+			2 [bitmap: copy bgImage change at bitmap current/pos + 1 current/bmp]
 			3 [bitmap: copy previous/bmp change at bitmap previous/pos + 1 previous/bmp]
 		]
 		if current/disposal = 1 [current/bmp: bitMap]
 		current/plot: compose [image (bitmap)]
+		;current/plot: compose [image (bgImage) image (current/bmp) (current/pos + 1)]
 	]
 ]
+
+
 
 ;*************************Getting frames********************
 
@@ -518,7 +522,7 @@ getFrame: func [
 	return:	[object!]
 ][
 	*frame: copy frame
-	unless empty? CGEBlock [readGCE gFile CGEBlock/(n)]	;--Graphics Control Extension
+	unless empty? GCEBlock [readGCE gFile GCEBlock/(n)]	;--Graphics Control Extension
 	unless empty? IMDBlock [readIMD gFile IMDBlock/(n)]	;--Image descriptors
 	idx: IMDBlock/(n)									;--IMD position in file
 	*frame/disposal: 			GCE/disposal
@@ -554,97 +558,3 @@ getFrame: func [
 	*frame/minLZWCode: imageData/lzwCode
 	*frame
 ]
-
-;--****************** Test Program ***************************
-
-rate: none
-nbFrames: 0
-count: 1
-bgColor: to-tuple #{000000}
-globalColorTable: none
-
-loadGif: does [
-	tmpf: request-file/filter ["GIF Files" "*.gif"]
-	unless none? tmpf [
-		sb/text: "Patience decoding gif file..."
-		clear canvas/draw
-		canvas/image: load tmpf
-		current: none
-		win/text: rejoin ["GIF Reader : " form second split-path  tmpf]
-		either %.gif = suffix? tmpf [gFile: read/binary tmpf]
-									[sb/text: "Not a GIF!" return false]
-		
-		readHeader gFile 0 		;--Get Header
-		readLSD gFile 6 		;--Get Logical Screen Descriptor
-		getGifBlocks			;--Get image descriptors and optional sub-blocks
-		unless empty? APEBlock [readAPE gFile APEBlock/1]
-		nbFrames: length? IMDBlock
-		frames: copy []
-		repeat i nbFrames [
-			sb/text: rejoin ["Decoding frame " i " / " nbFrames] 
-			do-events/no-wait
-			append frames getFrame i
-			decodeLZW current: frames/:i 
-			makeImage current
-		]
-		current: frames/1
-		rate: none
-		if current/delay > 0 [rate: to integer! (100 / current/delay)]
-		
-		either current/size > 100x100 [
-				canvas/size: current/size
-				win/size: max canvas/size + 20x85 380x195
-				sb/size/x: max current/size/x 350
-				sb/offset: as-pair 10 current/size/y + 55
-			]
-			[canvas/size: 100x100 win/size: 380x195 
-			 sb/offset: 10x160 sb/size: 350x25
-		]
-		either nbFrames = 1 [b2/enabled?: b3/enabled?: b4/enabled?: b5/enabled?: false]
-					 		[b2/enabled?: b3/enabled?: b4/enabled?: b5/enabled?: true]
-		center-face win
-		count: 1
-		canvas/rate: none
-		renderImages frames
-		showFrame
-	]
-]
-
-;--Use draw for correctly translating image in canvas
-showFrame: does [
-	if count < 1 [count: nbFrames]
-	if count > nbFrames [count: 1]
-	current: frames/:count 
-	sb/text: rejoin ["frame " count " [" current/size  " " current/pos " ]"]
-	either current/transparent? [canvas/image: bg][canvas/image: black]
-	canvas/draw: current/plot 
-	count: count + 1 
-]
-
-
-win: layout [title "GIF Reader" 
-	b1: button "Load"	[loadGif] 
-	b2: button "Start"  [canvas/rate: rate]
-	b3: button "Stop"   [canvas/rate: none]
-	b4: button 30 "<"	[count: count - 2 showFrame]
-	b5: button 30 ">"	[showFrame] 
-	button "Quit" 		[quit]
-	return 
-	canvas: image
-		draw []
-		on-time [showFrame]
-	return 
-	sb: base 380x25 white left middle
-	do [rate: canvas/rate: none]
-]
-view win	
-
-
-
-
-
-
-
-
-
-
