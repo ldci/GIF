@@ -245,15 +245,15 @@ readAPE: function [
 	
  ][
  	gif: skip head gif index
- 	COE/code: to integer! copy/part gif 1 gif: skip gif 1
- 	COE/label: to integer! copy/part gif 1 gif: skip gif 1
- 	COE/nBytes: to integer! copy/part gif 1 gif: skip gif 1
- 	COE/commentData: copy []
- 	repeat i COE/nBytes [
- 		append COE/commentData to integer! copy/part gif 1 
+ 	CEX/code: to integer! copy/part gif 1 gif: skip gif 1
+ 	CEX/label: to integer! copy/part gif 1 gif: skip gif 1
+ 	CEX/nBytes: to integer! copy/part gif 1 gif: skip gif 1
+ 	CEX/commentData: copy []
+ 	repeat i CEX/nBytes [
+ 		append CEX/commentData to integer! copy/part gif 1 
  		gif: skip gif 1
  	]
- 	COE/terminator: to integer! copy/part gif 1 ;gif: skip gif 1
+ 	CEX/terminator: to integer! copy/part gif 1 ;gif: skip gif 1
  ]
  
  ;--Image Descriptor and image data
@@ -312,7 +312,6 @@ getGifBlocks: does [
  			append append clear tmp gFile/7 gFile/6 w: to integer! tmp
  			append append clear tmp gFile/9 gFile/8 h: to integer! tmp
  			if all [
- 				w > 0 h > 0
  				l <= LSD/width t <= LSD/height 
  				w <= LSD/width h <= LSD/height
  			] [append IMDBlock idx]
@@ -357,6 +356,7 @@ getGifBlocks: does [
  			any [b = 0 b = trailer]	
  		]	
  	]
+ 	;probe reverse imageData/binaryData
  	imageData/binaryData: reverse imageData/binaryData
 ]
 
@@ -484,7 +484,7 @@ renderImages: func [
 	if LSD/hasColorTable? [
 		;--we need a background image (most of gif are based on first pixel)
 		if LSD/backGround >= 255 [LSD/backGround: 0]
-		bgColor: white; to-tuple globalColorTable/(LSD/backGround + 1)
+		bgColor: to-tuple globalColorTable/(LSD/backGround + 1)
 		bgImage: make image! reduce [as-pair LSD/width LSD/height bgColor 0]
 		save %img0.png bgImage
 	]
@@ -517,6 +517,7 @@ getFrame: func [
 	n		[integer!]
 	return:	[object!]
 ][
+	print [ "Image" n]
 	*frame: copy frame
 	unless empty? GCEBlock 		[readGCE gFile GCEBlock/(n)]	;--Graphics Control Extension
 	unless empty? IMDBlock 		[readIMD gFile IMDBlock/(n)]	;--Image descriptors
@@ -557,16 +558,19 @@ getFrame: func [
 bgColor: to-tuple #{000000}
 globalColorTable: none
 
-gFile: read %dance.gif;%rotating_earth.gif;%animation.gif; %dance.gif; %animation.gif
-print ["Patience Decoding File..."]
+gFile: read %../Examples/dance.gif;%rotating_earth.gif;%animation.gif; %dance.gif; %animation.gif
+;print ["Patience Decoding File..."]
 readHeader gFile 0 							;--Get Header
+t1: now/time/precise
 readLSD gFile 6 							;--Get Logical Screen Descriptor
 getGifBlocks								;--Get image descriptor and optional sub-blocks
 unless empty? APEBlock [
 	readAPE gFile APEBlock/1
 ]
+;probe LSD
+;probe IMDBlock
 nbFrames: length? IMDBlock					;--Number of frames in gif file 
-print ["Number of frames: "nbFrames]		
+
 frames: copy []								;--Block of images
 unless empty? frames [clear frames]
 repeat i nbFrames [
@@ -574,7 +578,11 @@ repeat i nbFrames [
 	current: frames/:i						;--current frame
 	decodeLZW current						;--Decode LZW compressed values
 ]
+print ["Number of frames: " nbFrames]	
 renderImages frames							;--View animated Gif
+t2: now/time/precise
+print t2 - t1	
+
 
 
 
