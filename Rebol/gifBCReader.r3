@@ -21,8 +21,8 @@ if readHeader gif [
 		decodeLZW current						;--Decode LZW compressed values
 	]
 	print ["Number of frames: " nbFrames]
-	;renderImages/viewer frames gColorTable
-	renderImages frames gColorTable
+	renderImages/viewer frames gColorTable
+	;renderImages frames gColorTable
 	t2: now/time/precise
 	print t2 - t1
 ]

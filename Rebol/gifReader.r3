@@ -408,7 +408,7 @@ decodeLZW: function [
 	code: prev: none
 	
 	while [not empty? c: take/last/part stream codeSize][
-		code: getCode copy c 
+		code: getCode c 
 		case [
 			code = clearCode  [
 				codeSize: imageData/lzwCode + 1 
@@ -480,13 +480,15 @@ comment [
 
 renderImages: func [
 	images	[block!]
+	/viewer
 ][
+	imageList: "open "
 	if LSD/hasColorTable? [
 		;--we need a background image (most of gif are based on first pixel)
 		if LSD/backGround >= 255 [LSD/backGround: 0]
 		bgColor: to-tuple globalColorTable/(LSD/backGround + 1)
 		bgImage: make image! reduce [as-pair LSD/width LSD/height bgColor 0]
-		save %img0.png bgImage
+		if viewer [save %img0.png bgImage]
 	]
 	n: length? images 
 	repeat i n [
@@ -499,15 +501,16 @@ renderImages: func [
 			2 [bitmap: copy bgImage change at bitmap current/pos + 1 current/bmp]
 			3 [bitmap: copy previous/bmp change at bitmap previous/pos + 1 previous/bmp]
 		]
-		;print [ "frame " i previous/size current/pos current/size current/disposal 
-		;current/transparent? current/localColorTable?]
+		if viewer [
+			print [ "frame " i current/pos current/size current/disposal 
+			current/transparent? current/localColorTable?]
+		]
 		current/bmp: bitmap
 		img: to-word rejoin ["img" i ".png"]
-		repeat i n [
-			;save to-file img bitmap
-			;call/shell rejoin ["open " img]
-		]
+		append append imageList img " "
+		if viewer [save to-file img bitmap]
 	]
+	if viewer [call/shell imageList]
 ]
 
 ;*************************Getting frames********************
@@ -579,7 +582,7 @@ repeat i nbFrames [
 	decodeLZW current						;--Decode LZW compressed values
 ]
 print ["Number of frames: " nbFrames]	
-renderImages frames							;--View animated Gif
+renderImages/viewer frames							;--View animated Gif
 t2: now/time/precise
 print t2 - t1	
 

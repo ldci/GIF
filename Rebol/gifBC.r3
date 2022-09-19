@@ -456,6 +456,7 @@ renderImages: func [
 	images	[block!]
 	/viewer
 ][
+	imageList: "open "
 	if LSD/hasColorTable? [
 		;--we need a background image (most of gif are based on first pixel)
 		if LSD/backGround >= 255 [LSD/backGround: 0]
@@ -463,13 +464,15 @@ renderImages: func [
 		blk: copy []
 		while [not empty? b/buffer][append blk binary/read b [rgb: TUPLE3]]
 		bgColor: blk/(LSD/backGround + 1)
-		bgImage: make image! reduce [as-pair LSD/width LSD/height bgColor 255];--or 0
+		bgImage: make image! reduce [as-pair LSD/width LSD/height bgColor 0];--or 0
 		if viewer [
 			save %img0.png bgImage
-			call/shell rejoin ["open img0.png" ]
+			;append imageList "img0.png "
+			;call/shell rejoin ["open img0.png" ]
 		]
 	]
 	n: length? images 
+	
 	repeat i n [
 		current: images/:i
 		either i = 1 [previous: current] [previous: images/(i - 1)]
@@ -487,12 +490,9 @@ renderImages: func [
 		
 		current/bmp: bitmap
 		img: to-word rejoin ["img" i ".png"]
-		if viewer [
-			repeat i n [
-				save to-file img bitmap
-				call/shell rejoin ["open " img]
-			]
-		]
+		append append imageList img " "
+		if viewer [save to-file img bitmap]
 	]
+	if viewer [call/shell imageList]
 ]
 
