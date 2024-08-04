@@ -1,4 +1,4 @@
-#!/usr/local/bin/r310
+#!/usr/local/bin/r3
 REBOL [ 
 ] 
 
